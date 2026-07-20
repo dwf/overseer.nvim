@@ -42,18 +42,19 @@ neotest.overseer.run = nio.create(function(args)
 end, 1)
 
 ---@private
-neotest.overseer.rerun_task_group = nio.create(function(group_id)
+neotest.overseer.rerun_task_group = nio.create(function(group_id, args)
   local strategy = require("neotest.client.strategies.overseer")
   strategy.recycle_group(group_id)
   strategy.set_group_id(group_id)
   local group = task_groups[group_id]
-  local tree = client:get_position(group.position_id, group.args)
+  args = vim.tbl_extend("keep", args or {}, group.args)
+  local tree = client:get_position(group.position_id, args)
   if not tree then
     lib.notify("Prior test could not be found")
     return
   end
-  client:run_tree(tree, group.args)
-end, 1)
+  client:run_tree(tree, args)
+end, 2)
 
 function neotest.overseer.run_last(args)
   args = args or {}
@@ -64,7 +65,7 @@ function neotest.overseer.run_last(args)
     lib.notify("No tests run yet")
     return
   end
-  neotest.overseer.rerun_task_group(last_group_id)
+  neotest.overseer.rerun_task_group(last_group_id, args)
 end
 
 neotest.overseer = setmetatable(neotest.overseer, {
