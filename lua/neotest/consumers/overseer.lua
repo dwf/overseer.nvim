@@ -9,6 +9,17 @@ local client
 local last_group_id = 0
 local task_groups = {}
 
+---@param tree neotest.Tree
+---@param args table
+local function augment_args(tree, args)
+  local aug = config.run.augment
+  if not aug then
+    return args
+  end
+  nio.scheduler()
+  return aug(tree, args)
+end
+
 neotest.overseer.run = nio.create(function(args)
   args = args or {}
   if type(args) == "string" then
@@ -37,8 +48,9 @@ neotest.overseer.run = nio.create(function(args)
   last_group_id = last_group_id + 1
   strategy.set_group_id(last_group_id)
 
-  task_groups[last_group_id] = { args = args, position_id = tree:data().id }
-  client:run_tree(tree, args)
+  task_groups[last_group_id] =
+    { args = vim.tbl_extend("force", {}, args), position_id = tree:data().id }
+  client:run_tree(tree, augment_args(tree, args))
 end, 1)
 
 ---@private
@@ -53,7 +65,7 @@ neotest.overseer.rerun_task_group = nio.create(function(group_id, args)
     lib.notify("Prior test could not be found")
     return
   end
-  client:run_tree(tree, args)
+  client:run_tree(tree, augment_args(tree, args))
 end, 2)
 
 function neotest.overseer.run_last(args)
