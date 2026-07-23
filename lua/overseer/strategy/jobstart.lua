@@ -334,8 +334,11 @@ end
 
 function JobstartStrategy:stop()
   if self.job_id and self.job_id > 0 then
+    -- Don't null out job_id here: the on_exit callback compares it against the
+    -- exiting job's id to detect stale callbacks after a restart, and relies on
+    -- being able to see a match here in order to call task:on_exit() and record
+    -- the exit code for a task that was stopped rather than left to finish.
     vim.fn.jobstop(self.job_id)
-    self.job_id = nil
   end
 end
 

@@ -7,6 +7,14 @@ local util = require("overseer.util")
 
 local M = {}
 
+-- After a stop, task.exit_code is populated asynchronously once the real job
+-- actually exits. Poll briefly for it rather than reporting prematurely.
+local STOP_EXIT_CODE_POLL_INTERVAL_MS = 50
+local STOP_EXIT_CODE_POLL_TIMEOUT_MS = 2000
+-- jobstart/jobstop never produce a negative exit code, so this can't be
+-- mistaken for a real one; it only surfaces if the real code never arrives.
+local STOP_EXIT_CODE_FALLBACK = -1
+
 local current_group_id = 0
 local tasks_by_group = {}
 local pool = {}
@@ -161,7 +169,18 @@ local function get_strategy(spec, context)
           attach_win:close(true)
         end)
       end
-      return task.exit_code
+      if task.exit_code == nil then
+        -- When the task was stopped rather than left to finish naturally,
+        -- `on_complete` fires (and unblocks us) before the underlying job has
+        -- actually exited, so task.exit_code isn't populated yet. Give the
+        -- real exit a brief window to show up (it usually does, quickly).
+        local waited = 0
+        while task.exit_code == nil and waited < STOP_EXIT_CODE_POLL_TIMEOUT_MS do
+          nio.sleep(STOP_EXIT_CODE_POLL_INTERVAL_MS)
+          waited = waited + STOP_EXIT_CODE_POLL_INTERVAL_MS
+        end
+      end
+      return task.exit_code or STOP_EXIT_CODE_FALLBACK
     end,
   }
 end
